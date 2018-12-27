@@ -51,7 +51,7 @@ class GrantAdmin(GeneralAdmin):
     def logo_svg_asset(self, instance):
         """Define the logo SVG tag to be displayed in the admin."""
         if instance.logo_svg and instance.logo_svg.url:
-            return mark_safe(f'<img src="{instance.svg.url}" width="300" height="300" />')
+            return mark_safe(f'<img src="{instance.custom_avatar.svg.url}" width="300" height="300" />')
         return mark_safe('N/A')
 
     def team_member_list(self, instance):

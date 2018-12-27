@@ -37,6 +37,27 @@ from .utils import build_avatar_component, convert_img, convert_wand, get_upload
 logger = logging.getLogger(__name__)
 
 
+
+class CustomAvatar(SuperModel):
+    """Store information about custom avatar."""
+
+    class Meta:
+        """Define the metadata associated with Custom Avatar."""
+
+    # Custom Avatar
+    png = models.ImageField(
+        upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar PNG.'),
+    )
+    svg = models.FileField(
+        upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar SVG.'),
+    )
+    profile = models.ForeignKey('dashboard.Profile', on_delete=models.CASCADE, null=True)
+
+    @property
+    def avatar_url(self):
+        return self.svg.url
+
+
 class Avatar(SuperModel):
     """Store the options necessary to render a Gitcoin avatar."""
 
@@ -55,13 +76,15 @@ class Avatar(SuperModel):
     png = models.ImageField(
         upload_to=get_upload_filename, null=True, blank=True, help_text=_('The Github avatar PNG.'),
     )
+
+    custom_avatar = models.ForeignKey('avatar.CustomAvatar', on_delete=models.CASCADE, null=True)
     # Custom Avatar
-    custom_avatar_png = models.ImageField(
-        upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar PNG.'),
-    )
-    svg = models.FileField(
-        upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar SVG.'),
-    )
+    # custom_avatar_png = models.ImageField(
+    #     upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar PNG.'),
+    # )
+    # svg = models.FileField(
+    #     upload_to=get_upload_filename, null=True, blank=True, help_text=_('The custom avatar SVG.'),
+    # )
 
     use_github_avatar = models.BooleanField(default=True)
 
@@ -71,7 +94,10 @@ class Avatar(SuperModel):
 
     def __init__(self, *args, **kwargs):
         super(Avatar, self).__init__(*args, **kwargs)
-        self.__previous_svg = self.svg
+        if self.custom_avatar and self.custom_avatar.svg:
+            self.__previous_svg = self.custom_avatar.svg
+        else :    
+            self.__previous_svg = None
         self.__previous_png = self.png
 
     def __str__(self):
@@ -80,7 +106,7 @@ class Avatar(SuperModel):
 
     def save(self, *args, force_insert=False, force_update=False, **kwargs):
         """Override the save to perform change comparison against PNG and SVG fields."""
-        if self.svg:
+        if self.custom_avatar and self.custom_avatar.svg:
             self.convert_custom_svg(True)
         if self.png:
             self.convert_github_png(True)
@@ -144,8 +170,8 @@ class Avatar(SuperModel):
             return self.pull_github_avatar()
         if self.use_github_avatar and self.github_svg:
             return self.github_svg.url
-        if self.svg:
-            return self.svg.url
+        if self.custom_avatar and self.custom_avatar.svg:
+            return self.custom_avatar.svg.url
         return ''
 
     def determine_response(self, use_svg=True):
@@ -161,13 +187,13 @@ class Avatar(SuperModel):
         if not use_svg:
             if self.use_github_avatar and self.png:
                 image = self.png.file
-            elif not self.use_github_avatar and self.custom_avatar_png:
-                image = self.custom_avatar_png.file
+            elif not self.use_github_avatar and self.custom_avatar.png:
+                image = self.custom_avatar.png.file
         else:
             if self.use_github_avatar and self.github_svg:
                 image = self.github_svg.file
-            elif not self.use_github_avatar and self.svg:
-                image = self.svg.file
+            elif not self.use_github_avatar and self.custom_avatar and self.custom_avatar.svg:
+                image = self.custom_avatar.svg.file
         return image, content_type
 
     def get_avatar_url(self, use_svg=True):
@@ -183,22 +209,22 @@ class Avatar(SuperModel):
                     return self.png.url
                 if self.use_github_avatar and not self.png:
                     return self.pull_github_avatar()
-                if not self.use_github_avatar and self.custom_avatar_png:
-                    return self.custom_avatar_png.url
-                if not self.use_github_avatar and not self.custom_avatar_png:
+                if not self.use_github_avatar and self.custom_avatar.png:
+                    return self.custom_avatar.png.url
+                if not self.use_github_avatar and not self.custom_avatar.png:
                     self.convert_custom_svg(force_save=True)
-                    return self.custom_avatar_png.url
+                    return self.custom_avatar.png.url
             if self.use_github_avatar and self.github_svg:
                 return self.github_svg.url
             if self.use_github_avatar and not self.github_svg:
                 if self.png:
                     self.convert_github_png(force_save=True)
                     return self.github_svg.url
-            if not self.use_github_avatar and self.svg:
-                return self.svg.url
-            if not self.use_github_avatar and not self.svg:
+            if not self.use_github_avatar and self.custom_avatar and self.custom_avatar.svg:
+                return self.custom_avatar.svg.url
+            if not self.use_github_avatar and not self.custom_avatar:
                 self.create_from_config()
-                return self.svg.url
+                return self.custom_avatar.svg.url
         except ValueError:
             pass
 
@@ -242,9 +268,10 @@ class Avatar(SuperModel):
                     profile = self.profile_set.last()
 
                 svg_name = profile.handle if profile and profile.handle else token_hex(8)
-                self.svg.save(f"{svg_name}.svg", File(file), save=True)
+                self.custom_avatar = CustomAvatar.objects.create(profile=profile)
+                self.custom_avatar.svg.save(f"{svg_name}.svg", File(file), save=True)
 
-    def convert_field(self, source, target='custom_avatar_png', input_fmt='svg', output_fmt='png', force_save=False):
+    def convert_field(self, source, target='custom_avatar.png', input_fmt='svg', output_fmt='png', force_save=False):
         """Handle converting from the source field to the target based on format."""
         try:
             # Convert the provided source to the specified output and store in BytesIO.
@@ -271,11 +298,11 @@ class Avatar(SuperModel):
     def convert_custom_svg(self, force_save=False):
         """Handle converting the custom Avatar SVG to PNG."""
         try:
-            if not self.svg:
+            if not self.custom_avatar:
                 self.create_from_config()
 
             converted = self.convert_field(
-                self.svg, 'custom_avatar_png', input_fmt='svg', output_fmt='png', force_save=force_save
+                self.custom_avatar.svg, 'custom_avatar.png', input_fmt='svg', output_fmt='png', force_save=force_save
             )
             if not converted:
                 raise AvatarConversionError('Avatar conversion error while converting SVG!')

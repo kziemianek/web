@@ -55,14 +55,14 @@ class AvatarAdmin(GeneralAdmin):
     # Custom Avatars
     def svg_asset(self, instance):
         """Define the avatar SVG tag to be displayed in the admin."""
-        if instance.svg and instance.svg.url:
-            return mark_safe(f'<img src="{instance.svg.url}" width="150" height="150" />')
+        if instance.custom_avatar and instance.custom_avatar.svg and instance.custom_avatar.svg.url:
+            return mark_safe(f'<img src="{instance.custom_avatar.svg.url}" width="150" height="150" />')
         return mark_safe('N/A')
 
     def custom_png_asset(self, instance):
         """Define the custom avatar PNG tag to be displayed in the admin."""
-        if instance.custom_avatar_png and instance.custom_avatar_png.url:
-            return mark_safe(f'<img src="{instance.custom_avatar_png.url}" width="150" height="150" />')
+        if instance.custom_avatar.png and instance.custom_avatar.png.url:
+            return mark_safe(f'<img src="{instance.custom_avatar.png.url}" width="150" height="150" />')
         return mark_safe('N/A')
 
     # Github Avatars
