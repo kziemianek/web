@@ -22,3 +22,8 @@ class AvatarConversionError(AvatarError):
     """Handle avatar conversion failures."""
 
     pass
+
+class AvatarDuplicateError(AvatarError):
+    """Handle avatar duplicate error."""
+
+    default_message = "Avatar exists"

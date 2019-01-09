@@ -5,33 +5,32 @@ from rest_framework import routers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Avatar
-from .serializers import AvatarSerializer
+from .models import BaseAvatar, CustomAvatar
+from .serializers import BaseAvatarSerializer, CustomAvatarSerializer
 
 logger = logging.getLogger(__name__)
 
 
-class AvatarViewSet(viewsets.ReadOnlyModelViewSet):
+class UserAvatarsViewSet(viewsets.ReadOnlyModelViewSet):
 
-    serializer_class = AvatarSerializer
+    serializer_class = BaseAvatarSerializer
     filter_backends = (django_filters.rest_framework.DjangoFilterBackend,)
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        param_keys = self.request.query_params.keys()
-        queryset = Avatar.objects.all().order_by('-id')
+        return BaseAvatar.objects.all().order_by('-id').filter(profile__pk=self.request.user.profile.pk)
 
-        if 'recommended_by_staff' in param_keys:
-            queryset = queryset.filter(recommended_by_staff=self.request.query_params.get('recommended_by_staff'))
 
-        if 'profile' in param_keys:
-            requested_profile_pk = self.request.query_params.get('profile')
-            if self.request.user.profile.pk != int(requested_profile_pk):
-                raise PermissionDenied()
-            queryset = queryset.filter(profile__pk=self.request.query_params.get('profile'))
+class RecommendedByStaffAvatarsAvatarViewSet(viewsets.ReadOnlyModelViewSet):
 
-        return queryset
+    serializer_class = CustomAvatarSerializer
+    filter_backends = (django_filters.rest_framework.DjangoFilterBackend,)
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        return CustomAvatar.objects.all().order_by('-id').filter(recommended_by_staff=True)
 
 
 router = routers.DefaultRouter()
-router.register(r'avatars', AvatarViewSet, base_name="avatars")
+router.register(r'user-avatars', UserAvatarsViewSet, base_name="user_avatars")
+router.register(r'recommended-by-staff', RecommendedByStaffAvatarsAvatarViewSet, base_name="recommended_by_staff_avatars")

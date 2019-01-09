@@ -1,13 +1,23 @@
 from rest_framework import serializers
 
-from .models import Avatar
+from .models import BaseAvatar
 
 
-class AvatarSerializer(serializers.ModelSerializer):
-    """Handle serializing the Avatar object."""
+class BaseAvatarSerializer(serializers.ModelSerializer):
+    """Handle serializing the BaseAvatar object."""
 
     class Meta:
         """Define the milestone serializer metadata."""
 
-        model = Avatar
+        model = BaseAvatar
+        fields = ('pk', 'avatar_url', 'active')
+
+
+class CustomAvatarSerializer(serializers.ModelSerializer):
+    """Handle serializing the CustomAvatar object."""
+
+    class Meta:
+        """Define the milestone serializer metadata."""
+
+        model = BaseAvatar
         fields = ('pk', 'avatar_url', 'active')

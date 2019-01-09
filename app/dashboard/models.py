@@ -1692,6 +1692,7 @@ class Profile(SuperModel):
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True)
     data = JSONField()
     handle = models.CharField(max_length=255, db_index=True, unique=True)
+    avatar = models.ForeignKey('avatar.Avatar', on_delete=models.SET_NULL, null=True, blank=True)
     last_sync_date = models.DateTimeField(null=True)
     email = models.CharField(max_length=255, blank=True, db_index=True)
     github_access_token = models.CharField(max_length=255, blank=True, db_index=True)
@@ -2060,8 +2061,8 @@ class Profile(SuperModel):
         }
 
     @property
-    def avatar(self):
-        return self.avatars.filter(active=True).first()
+    def active_avatar(self):
+        return self.avatar_baseavatar_related.filter(active=True).first()
 
     @property
     def github_url(self):
@@ -2383,9 +2384,9 @@ class Profile(SuperModel):
 
         return all_activities
 
-    def activate_avatar(self, avatarPk):
-        self.avatars.update(active=False)
-        self.avatars.filter(pk=avatarPk).update(active=True)
+    def activate_avatar(self, avatar_pk):
+        self.avatar_baseavatar_related.update(active=False)
+        self.avatar_baseavatar_related.filter(pk=avatar_pk).update(active=True)
 
     def to_dict(self, activities=True, leaderboards=True, network=None, tips=True):
         """Get the dictionary representation with additional data.

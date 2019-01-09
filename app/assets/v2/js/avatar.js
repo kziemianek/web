@@ -54,7 +54,7 @@ var AvatarPage = (function(profileId) {
     }
     var avatarToActivatePk = targetEl.data('avatar-pk');
 
-    postSelection('/avatar/activate', avatarToActivatePk)
+    postSelection('/avatar/activate/', avatarToActivatePk)
       .then((response) => {
         if (response.ok) {
           markAvatarAsActive(targetEl);
@@ -72,7 +72,7 @@ var AvatarPage = (function(profileId) {
     targetEl = $(e.currentTarget);
     var avatarToSelectPk = targetEl.data('avatar-pk');
 
-    postSelection('/avatar/select-preset', avatarToSelectPk)
+    postSelection('/avatar/select-preset/', avatarToSelectPk)
       .then((response) => {
         if (response.ok) {
           var activatedAvatar = presetAvatars.filter((avatar) => avatar.pk === avatarToSelectPk)[0];
@@ -89,7 +89,7 @@ var AvatarPage = (function(profileId) {
   }
 
   function loadPresetAvatars() {
-    fetch('/api/v0.1/avatars?recommended_by_staff=True')
+    fetch('/api/v0.1/recommended-by-staff/')
       .then((resp) => resp.json())
       .then((response) => {
         presetAvatars = response;
@@ -102,7 +102,7 @@ var AvatarPage = (function(profileId) {
   }
 
   function loadMyAvatars() {
-    fetch('/api/v0.1/avatars?profile=' + profileId)
+    fetch('/api/v0.1/user-avatars/')
       .then((resp) => resp.json())
       .then((response) => {
         myAvatars = response;
@@ -128,4 +128,4 @@ var AvatarPage = (function(profileId) {
 
   setupTabActivationListener();
 
-}(profileId));
+}());

@@ -352,7 +352,7 @@ function saveAvatar() {
   $('#later-button').hide();
 
   var request = $.ajax({
-    url: '/avatar/save',
+    url: '/avatar/custom/save',
     type: 'POST',
     data: JSON.stringify(options),
     dataType: 'json',

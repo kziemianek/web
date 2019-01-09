@@ -29,8 +29,9 @@ from git.utils import org_name
 from marketing.utils import is_deleted_account
 from PIL import Image, ImageOps
 
-from .models import Avatar
-from .utils import add_gitcoin_logo_blend, build_avatar_svg, get_avatar, get_err_response, handle_avatar_payload
+from .models import Avatar, SocialAvatar, CustomAvatar, BaseAvatar
+from .utils import add_gitcoin_logo_blend, build_avatar_svg, get_avatar, get_err_response, handle_avatar_payload, get_user_github_avatar_image
+from .exceptions import AvatarDuplicateError
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def avatar(request):
     preview = request.GET.get('preview', False)
     payload = {
         'background_color': f"#{request.GET.get('background', '781623')}",
-        'icon_size': (int(request.GET.get('icon_width', 215)), int(request.GET.get('icon_height', 215))),
+        'icon_size': (int(request.GET.get('icon_width', BaseAvatar.ICON_SIZE[0])), int(request.GET.get('icon_height', BaseAvatar.ICON_SIZE[1]))),
         'avatar_size': request.GET.get('avatar_size', None),
         'skin_tone': skin_tone,
     }
@@ -78,35 +79,46 @@ def avatar(request):
 
 
 @csrf_exempt
-def save_avatar(request):
-    """Save the Avatar configuration."""
+def save_github_avatar(request):
+    # TODO: it might not be required as github avatar is automatically added to my avatars...
+    # TODO: do not save if as user currently own one
+    """Save the Github Avatar."""
     response = {'status': 200, 'message': 'Avatar saved'}
     if not request.user.is_authenticated or request.user.is_authenticated and not getattr(
         request.user, 'profile', None
     ):
         return JsonResponse({'status': 405, 'message': 'Authentication required'}, status=405)
-
     profile = request.user.profile
-
-    if request.body and 'use_github_avatar' in str(request.body):
-        if not profile.avatar:
-            profile.avatar = Avatar.objects.create()
-            profile.save()
-        profile.avatar.use_github_avatar = True
-        avatar_url = profile.avatar.pull_github_avatar()
+    github_avatar_img = get_user_github_avatar_image(profile.handle)
+    if not github_avatar_img:
+        # todo: handle properly
+        logger.info("no github avatar")
+    try:    
+        github_avatar = SocialAvatar.github_avatar(profile, github_avatar_img)         
+        profile.activate_avatar(github_avatar.pk)
         response['message'] = 'Avatar updated'
-        response['avatar_url'] = avatar_url
-        return JsonResponse(response, status=200)
+        response['avatar_url'] = github_avatar.avatar_url
+    except AvatarDuplicateError as e:
+        response['message'] = 'You already own this avatar'
+        response['status'] = 400
+    return JsonResponse(response, status=response['status'])
 
+
+@csrf_exempt
+def save_custom_avatar(request):
+    """Save the Custom Avatar."""
+    response = {'status': 200, 'message': 'Avatar saved'}
+    if not request.user.is_authenticated or request.user.is_authenticated and not getattr(
+        request.user, 'profile', None
+    ):
+        return JsonResponse({'status': 405, 'message': 'Authentication required'}, status=405)
+    profile = request.user.profile
     payload = handle_avatar_payload(request)
     try:
-        avatar = Avatar(config=payload, use_github_avatar=False, profile=profile)
-        avatar.use_github_avatar = False
-        response['message'] = 'Avatar updated'
-        avatar.create_from_config()
-        avatar.save()
-        profile.activate_avatar(avatar.pk)
+        custom_avatar = CustomAvatar.create(profile, payload)
+        profile.activate_avatar(custom_avatar.pk)
         create_user_action(profile.user, 'updated_avatar', request)
+        response['message'] = 'Avatar updated'
     except Exception as e:
         response['status'] = 400
         response['message'] = 'Bad Request'
@@ -129,6 +141,7 @@ def activate_avatar(request):
 
 
 def select_preset_avatar(request):
+    # todo: check if it works
     """Select preset Avatar."""
     response = {'status': 200, 'message': 'Preset avatar selected'}
     if not request.user.is_authenticated or request.user.is_authenticated and not getattr(
@@ -138,12 +151,10 @@ def select_preset_avatar(request):
     body = json.loads(request.body)
     profile = request.user.profile
     preset_activate_pk = body['avatarPk']
-    preset_avatar = Avatar.objects.get(pk=preset_activate_pk)
-    preset_avatar.pk = None
-    preset_avatar.recommended_by_staff = False
-    preset_avatar.profile = profile
-    preset_avatar.save()
-    profile.activate_avatar(preset_avatar.pk)
+    preset_avatar = CustomAvatar.objects.get(pk=preset_activate_pk)
+    new_avatar = CustomAvatar(profile=profile, config=preset_avatar.config, svg=preset_avatar.svg, png=preset_avatar.png)
+    new_avatar.save()
+    profile.activate_avatar(new_avatar.pk)
     return JsonResponse(response, status=response['status'])
 
 
@@ -160,8 +171,8 @@ def handle_avatar(request, _org_name='', add_gitcoincologo=False):
     if _org_name:
         try:
             profile = Profile.objects.select_related('avatar').filter(handle__iexact=_org_name).first()
-            if profile and profile.avatar:
-                avatar_file, content_type = profile.avatar.determine_response(request.GET.get('email', False))
+            if profile and profile.active_avatar:
+                avatar_file, content_type = profile.active_avatar.determine_response(request.GET.get('email', False))
                 if avatar_file:
                     return HttpResponse(avatar_file, content_type=content_type)
         except Exception as e:

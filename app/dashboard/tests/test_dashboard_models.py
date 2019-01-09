@@ -23,7 +23,7 @@ from django.conf import settings
 from django.contrib.humanize.templatetags.humanize import naturaltime
 
 import pytz
-from avatar.models import Avatar
+from avatar.models import Avatar, SocialAvatar, CustomAvatar
 from dashboard.models import Bounty, BountyFulfillment, Interest, Profile, Tip, Tool, ToolVote
 from economy.models import ConversionRate, Token
 from test_plus.test import TestCase
@@ -425,18 +425,17 @@ class DashboardModelsTest(TestCase):
 
     @staticmethod
     def test_profile_activate_avatar():
-        "Test the dashboard Profile model activate_avatar method."
+        """Test the dashboard Profile model activate_avatar method."""
         profile = Profile.objects.create(
             data={},
             handle='fred',
             email='fred@localhost'
         )
-        avatar_1 = Avatar.objects.create(profile=profile, active=True)
-        avatar_2 = Avatar.objects.create(profile=profile, active=False)
-        profile.avatars.set([avatar_1, avatar_2])
-        profile.activate_avatar(avatar_2.pk)
-        assert profile.avatars.get(pk=1).active is False
-        assert profile.avatars.get(pk=2).active is True
+        CustomAvatar.objects.create(profile=profile, config="{}")
+        social_avatar = SocialAvatar.objects.create(profile=profile, source="GITHUB")
+        profile.activate_avatar(social_avatar.pk)
+        assert profile.avatar_baseavatar_related.get(pk=1).active is False
+        assert profile.avatar_baseavatar_related.get(pk=2).active is True
 
     @staticmethod
     def test_bounty_snooze_url():
